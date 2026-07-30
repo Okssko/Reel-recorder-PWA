@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Reel — Music Recorder</title>
+<meta name="description" content="Record takes, keep every reel, play them back anywhere — even offline." />
+<meta name="theme-color" content="#17140f" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+
+  <div class="masthead">
+    <div>
+      <h1>RE<span>EL</span></h1>
+      <div class="tagline">Take machine — record / play</div>
+    </div>
+    <button id="install-btn">Install app</button>
+  </div>
+
+  <div class="source-toggle" id="source-toggle">
+    <button class="src-btn active" data-src="mic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
+      Mic
+    </button>
+    <button class="src-btn" data-src="display">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      Tab / System audio
+    </button>
+  </div>
+  <div class="source-hint" id="source-hint">Records whatever your microphone picks up.</div>
+
+  <div class="source-toggle" id="source-toggle">
+    <button class="src-btn active" data-src="mic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
+      Mic
+    </button>
+    <button class="src-btn" data-src="display">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      Tab / System audio
+    </button>
+  </div>
+  <div class="source-hint" id="source-hint">Records whatever your microphone picks up.</div>
+
+  <div class="deck">
+    <div class="vu-wrap">
+      <div class="vu">
+        <svg viewBox="0 0 128 82" id="vu-svg-l">
+          <!-- built by JS -->
+        </svg>
+        <div class="label">Left</div>
+      </div>
+      <div class="vu">
+        <svg viewBox="0 0 128 82" id="vu-svg-r">
+        </svg>
+        <div class="label">Right</div>
+      </div>
+    </div>
+
+    <div class="wave-strip">
+      <canvas id="live-wave"></canvas>
+    </div>
+
+    <div class="counter-row">
+      <span class="status-dot" id="status-dot"></span>
+      <div class="counter" id="counter">00:00.0</div>
+    </div>
+
+    <div class="transport">
+      <button class="btn-round" id="btn-discard" title="Discard take" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+      </button>
+      <button class="btn-record" id="btn-record" title="Record"></button>
+      <button class="btn-round" id="btn-save" title="Save take" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+      </button>
+    </div>
+
+    <div class="take-name-row" id="name-row" style="display:none;">
+      <input type="text" id="take-name-input" placeholder="Name this take…" maxlength="60" />
+    </div>
+    <div class="save-hint" id="save-hint">Tap the red button to start rolling tape</div>
+  </div>
+
+  <div class="library-head">
+    <h2>Reel library</h2>
+    <span class="library-count" id="lib-count">0 takes</span>
+  </div>
+
+  <div id="empty-state" class="empty-state">No takes yet. Your first recording will land here, saved right on this device.</div>
+  <div class="reel-list" id="reel-list"></div>
+
+  <footer class="note">Recordings are stored locally on this device (IndexedDB) and never leave it.<br/>Works offline once installed.</footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
