@@ -11,7 +11,72 @@
    6. Save / discard flow
    7. Library rendering + playback engine
    ========================================================= */
+// ---------- 0. Lock screen ----------
+// A local passcode gate, not real security (this is a static app with no
+// server) — it just keeps the app from being casually opened by anyone
+// who picks up the device. Anyone reading the source could bypass it.
 
+const LOCK_PASSCODE_HASH = '1af4e3e00aebf31f373d63327170a073aaa07ecaacb540826dabdce1aacce849'; // default passcode: oksana2026
+const LOCK_STORAGE_KEY = 'reel_unlocked_until';
+
+const lockOverlay = document.getElementById('lock-overlay');
+const lockForm = document.getElementById('lock-form');
+const lockInput = document.getElementById('lock-input');
+const lockError = document.getElementById('lock-error');
+const lockRememberCheck = document.getElementById('lock-remember-check');
+const lockBtn = document.getElementById('lock-btn');
+
+async function sha256Hex(text) {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function isUnlocked() {
+  const until = Number(localStorage.getItem(LOCK_STORAGE_KEY) || 0);
+  return Date.now() < until;
+}
+
+function showLock() {
+  lockOverlay.classList.remove('hidden');
+  lockInput.value = '';
+  lockError.textContent = '';
+  setTimeout(() => lockInput.focus(), 50);
+}
+
+function hideLock() {
+  lockOverlay.classList.add('hidden');
+}
+
+if (isUnlocked()) {
+  hideLock();
+} else {
+  showLock();
+}
+
+lockForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const entered = lockInput.value.trim();
+  const hash = await sha256Hex(entered);
+  if (hash === LOCK_PASSCODE_HASH) {
+    const days = lockRememberCheck.checked ? 7 : 0;
+    const until = Date.now() + days * 24 * 60 * 60 * 1000;
+    lockBtn.addEventListener('click', () => {
+  localStorage.removeItem(LOCK_STORAGE_KEY);
+  showLock();
+});
+  } else {
+    lockError.textContent = 'Wrong passcode — try again.';
+    lockInput.value = '';
+    lockInput.focus();
+  }
+});
+
+lockBtn.addEventListener('click', () => {
+  localStorage.removeItem(LOCK_STORAGE_KEY);
+  sessionStorage.removeItem('reel_api_passcode');
+  showLock();
+});
 // ---------- 1. Service worker + install prompt ----------
 
 if ('serviceWorker' in navigator) {
@@ -44,6 +109,72 @@ window.addEventListener('appinstalled', () => {
 // ---------- 2. IndexedDB (the tape library) ----------
 
 const DB_NAME = 'reel-db';
+const API_BASE = '/api/takes';
+
+function getApiPasscode() {
+  return sessionStorage.getItem('reel_api_passcode') || '';
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-reel-passcode': getApiPasscode(),
+      ...(options.headers || {})
+    }
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.status === 204 ? null : res.json();
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function dbAdd(record) {
+  const audioBase64 = await blobToBase64(record.blob);
+  const saved = await apiFetch(API_BASE, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: record.name,
+      mimeType: record.mimeType,
+      duration: record.duration,
+      peaks: record.peaks,
+      audioBase64
+    })
+  });
+  return saved.id;
+}
+
+async function dbGetAll() {
+  const rows = await apiFetch(API_BASE);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    duration: r.duration,
+    mimeType: r.mime_type,
+    blobUrl: r.blob_url,
+    peaks: r.peaks,
+    createdAt: Number(r.created_at)
+  }));
+}
+
+async function dbUpdate(record) {
+  await apiFetch(`${API_BASE}/${record.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name: record.name })
+  });
+}
+
+async function dbDelete(id) {
+  await apiFetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+}
 const DB_VERSION = 1;
 const STORE = 'takes';
 
@@ -620,9 +751,8 @@ async function playTake(record, cardEls) {
     return;
   }
 
-  stopAllPlayback();
-  const url = URL.createObjectURL(record.blob);
-  sharedAudioEl.src = url;
+ stopAllPlayback();
+  sharedAudioEl.src = record.blobUrl;
   currentPlayingId = record.id;
   await sharedAudioEl.play();
   statusDot.classList.add('play');
@@ -705,14 +835,17 @@ async function renderLibrary() {
       await dbUpdate(record);
     });
 
-    dlBtn.addEventListener('click', () => {
+   dlBtn.addEventListener('click', async () => {
       const ext = record.mimeType.includes('mp4') ? 'm4a' : record.mimeType.includes('ogg') ? 'ogg' : 'webm';
+      const res = await fetch(record.blobUrl);
+      const blob = await res.blob();
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(record.blob);
+      a.href = URL.createObjectURL(blob);
       a.download = `${record.name.replace(/[^a-z0-9 _-]/gi, '') || 'take'}.${ext}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      URL.revokeObjectURL(a.href);
     });
 
    const confirmBar = card.querySelector('.reel-confirm');

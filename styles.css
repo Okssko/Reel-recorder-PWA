@@ -48,6 +48,121 @@ body {
 }
 
 /* ---------- Header ---------- */
+/* ---------- Lock screen ---------- */
+
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  background-image: radial-gradient(ellipse at top, rgba(201, 162, 39, 0.08), transparent 55%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.lock-overlay.hidden { display: none; }
+
+.lock-card {
+  width: 100%;
+  max-width: 300px;
+  text-align: center;
+}
+
+.lock-reel {
+  width: 64px; height: 64px;
+  margin: 0 auto 14px;
+  color: var(--brass);
+}
+
+.lock-card h2 {
+  font-family: 'Oswald', sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+  color: var(--cream);
+}
+
+.lock-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--cream-dim);
+  margin-bottom: 22px;
+}
+
+#lock-form {
+  display: flex;
+  gap: 8px;
+}
+
+#lock-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--panel-line);
+  color: var(--cream);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+#lock-input:focus { outline: 1px solid var(--brass-dim); }
+
+#lock-form button {
+  background: var(--brass);
+  color: #1a1408;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0 18px;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+  cursor: pointer;
+}
+#lock-form button:active { transform: translateY(1px); }
+
+.lock-error {
+  min-height: 18px;
+  color: var(--red-bright);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  margin-top: 10px;
+}
+
+.lock-remember {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  color: var(--cream-dim);
+  cursor: pointer;
+}
+.lock-remember input { accent-color: var(--brass); }
+
+.masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#lock-btn {
+  background: transparent;
+  border: 1px solid var(--brass-dim);
+  color: var(--brass);
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+#lock-btn svg { width: 14px; height: 14px; }
 
 .masthead {
   display: flex;

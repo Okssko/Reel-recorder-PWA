@@ -2,7 +2,7 @@
 // Caches the app shell so the recorder + your saved takes work fully offline.
 // Recordings themselves live in IndexedDB (handled in app.js), not here.
 
-const CACHE_VERSION = 'reel-shell-v2';
+const CACHE_VERSION = 'reel-shell-v3';
 const SHELL_FILES = [
   './',
   './index.html',
