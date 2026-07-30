@@ -3,18 +3,20 @@
 /* =========================================================
    Reel — a small studio recorder PWA
    Sections:
+   0. Lock screen
    1. Service worker + install prompt
-   2. IndexedDB (the tape library)
+   2. Cloud API (the tape library — Postgres + Blob via /api/takes)
    3. VU meters (SVG dial + needle)
    4. Recording engine (getUserMedia + MediaRecorder + AnalyserNode)
    5. Live waveform + tape counter
    6. Save / discard flow
    7. Library rendering + playback engine
    ========================================================= */
+
 // ---------- 0. Lock screen ----------
 // A local passcode gate, not real security (this is a static app with no
-// server) — it just keeps the app from being casually opened by anyone
-// who picks up the device. Anyone reading the source could bypass it.
+// server-side session) — it just keeps the app from being casually opened
+// by anyone who picks up the device. Anyone reading the source could bypass it.
 
 const LOCK_PASSCODE_HASH = '1af4e3e00aebf31f373d63327170a073aaa07ecaacb540826dabdce1aacce849'; // default passcode: oksana2026
 const LOCK_STORAGE_KEY = 'reel_unlocked_until';
@@ -61,10 +63,10 @@ lockForm.addEventListener('submit', async (e) => {
   if (hash === LOCK_PASSCODE_HASH) {
     const days = lockRememberCheck.checked ? 7 : 0;
     const until = Date.now() + days * 24 * 60 * 60 * 1000;
-    lockBtn.addEventListener('click', () => {
-  localStorage.removeItem(LOCK_STORAGE_KEY);
-  showLock();
-});
+    localStorage.setItem(LOCK_STORAGE_KEY, String(until));
+    sessionStorage.setItem('reel_api_passcode', entered);
+    hideLock();
+    renderLibrary();
   } else {
     lockError.textContent = 'Wrong passcode — try again.';
     lockInput.value = '';
@@ -77,6 +79,7 @@ lockBtn.addEventListener('click', () => {
   sessionStorage.removeItem('reel_api_passcode');
   showLock();
 });
+
 // ---------- 1. Service worker + install prompt ----------
 
 if ('serviceWorker' in navigator) {
@@ -106,9 +109,8 @@ window.addEventListener('appinstalled', () => {
   installBtn.classList.remove('show');
 });
 
-// ---------- 2. IndexedDB (the tape library) ----------
+// ---------- 2. Cloud API (the tape library) ----------
 
-const DB_NAME = 'reel-db';
 const API_BASE = '/api/takes';
 
 function getApiPasscode() {
@@ -175,63 +177,6 @@ async function dbUpdate(record) {
 async function dbDelete(id) {
   await apiFetch(`${API_BASE}/${id}`, { method: 'DELETE' });
 }
-const DB_VERSION = 1;
-const STORE = 'takes';
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('createdAt', 'createdAt');
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbAdd(record) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).add(record);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbGetAll() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result.sort((a, b) => b.createdAt - a.createdAt));
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbUpdate(record) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).put(record);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbDelete(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
 
 // ---------- 3. VU meters ----------
 
@@ -245,7 +190,6 @@ function buildVUDial(svg) {
     return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
   }
 
-  // background arc face
   const face = document.createElementNS(ns, 'path');
   const [fx1, fy1] = pt(startDeg, r);
   const [fx2, fy2] = pt(endDeg, r);
@@ -255,7 +199,6 @@ function buildVUDial(svg) {
   face.setAttribute('stroke-width', '2');
   svg.appendChild(face);
 
-  // colored danger zone near the top end (last 15%)
   const zoneStart = startDeg + (endDeg - startDeg) * 0.78;
   const [zx1, zy1] = pt(zoneStart, r);
   const zone = document.createElementNS(ns, 'path');
@@ -265,7 +208,6 @@ function buildVUDial(svg) {
   zone.setAttribute('stroke-width', '2');
   svg.appendChild(zone);
 
-  // ticks
   for (let i = 0; i <= 10; i++) {
     const deg = startDeg + ((endDeg - startDeg) * i) / 10;
     const [x1, y1] = pt(deg, r + 3);
@@ -278,14 +220,12 @@ function buildVUDial(svg) {
     svg.appendChild(tick);
   }
 
-  // pivot
   const pivot = document.createElementNS(ns, 'circle');
   pivot.setAttribute('cx', cx); pivot.setAttribute('cy', cy);
   pivot.setAttribute('r', 4);
   pivot.setAttribute('fill', '#c9a227');
   svg.appendChild(pivot);
 
-  // needle
   const needle = document.createElementNS(ns, 'line');
   needle.setAttribute('class', 'needle');
   needle.setAttribute('x1', cx); needle.setAttribute('y1', cy);
@@ -303,7 +243,6 @@ const vuL = buildVUDial(document.getElementById('vu-svg-l'));
 const vuR = buildVUDial(document.getElementById('vu-svg-r'));
 
 function setNeedle(vu, level01) {
-  // level01: 0..1 -> map to angle sweep, with a little needle "weight" via easing
   const clamped = Math.max(0, Math.min(1, level01));
   const deg = vu.startDeg + (vu.endDeg - vu.startDeg) * clamped;
   vu.needle.style.transform = `rotate(${deg - vu.startDeg}deg)`;
@@ -403,7 +342,6 @@ async function startDisplayCapture() {
   }
   let displayStream;
   try {
-    // Chrome/Edge require video:true to be requested even though we only want audio.
     displayStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
@@ -414,7 +352,6 @@ async function startDisplayCapture() {
   }
 
   const audioTracks = displayStream.getAudioTracks();
-  // We don't need the video track at all — drop it immediately.
   displayStream.getVideoTracks().forEach((t) => t.stop());
 
   if (audioTracks.length === 0) {
@@ -423,7 +360,6 @@ async function startDisplayCapture() {
   }
 
   micStream = new MediaStream(audioTracks);
-  // If the user hits the browser's "Stop sharing" bar, end the take gracefully.
   audioTracks[0].addEventListener('ended', () => {
     if (recordingState === 'recording') stopRecording();
   });
@@ -537,7 +473,7 @@ function runLiveMeter() {
       sumSq += v * v;
     }
     const rms = Math.sqrt(sumSq / bufferLength);
-    const level = Math.min(1, rms * 3.2); // gain to make meter lively
+    const level = Math.min(1, rms * 3.2);
 
     setNeedle(vuL, level);
     setNeedle(vuR, Math.max(0, Math.min(1, level * (0.9 + Math.random() * 0.15))));
@@ -600,7 +536,6 @@ function formatTime(seconds, withDeci) {
 
 btnRecord.addEventListener('click', () => {
   if (recordingState === 'idle') {
-    // stop any playback first
     stopAllPlayback();
     startRecording();
   } else if (recordingState === 'recording') {
@@ -622,20 +557,24 @@ btnSave.addEventListener('click', async () => {
   const peaks = await computePeaks(currentTakeBlob).catch(() => []);
   const name = nameInput.value.trim() || 'Untitled take';
 
-  await dbAdd({
-    name,
-    mimeType: currentTakeMimeType,
-    blob: currentTakeBlob,
-    duration: currentTakeDuration,
-    peaks,
-    createdAt: Date.now()
-  });
-
-  resetToIdle();
-  await renderLibrary();
+  try {
+    await dbAdd({
+      name,
+      mimeType: currentTakeMimeType,
+      blob: currentTakeBlob,
+      duration: currentTakeDuration,
+      peaks,
+      createdAt: Date.now()
+    });
+    resetToIdle();
+    await renderLibrary();
+  } catch (err) {
+    saveHint.textContent = 'Save failed — check your connection and try again.';
+    btnSave.disabled = false;
+    btnDiscard.disabled = false;
+  }
 });
 
-// Decode the blob to compute a small peaks array for waveform rendering in the library.
 async function computePeaks(blob, targetPoints = 240) {
   const arrayBuffer = await blob.arrayBuffer();
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -674,6 +613,7 @@ function ensureSharedAudio() {
   if (sharedAudioEl) return;
   sharedAudioEl = new Audio();
   sharedAudioEl.preload = 'auto';
+  sharedAudioEl.crossOrigin = 'anonymous';
 
   try {
     const ctx = audioCtx && audioCtx.state !== 'closed' ? audioCtx : new (window.AudioContext || window.webkitAudioContext)();
@@ -731,13 +671,12 @@ function runPlaybackMeter() {
 }
 
 async function playTake(record, cardEls) {
-  if (recordingState === 'recording') return; // don't allow playback while rolling
+  if (recordingState === 'recording') return;
 
   ensureSharedAudio();
   if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
 
   if (currentPlayingId === record.id) {
-    // toggle pause
     if (sharedAudioEl.paused) {
       sharedAudioEl.play();
       statusDot.classList.add('play');
@@ -751,7 +690,7 @@ async function playTake(record, cardEls) {
     return;
   }
 
- stopAllPlayback();
+  stopAllPlayback();
   sharedAudioEl.src = record.blobUrl;
   currentPlayingId = record.id;
   await sharedAudioEl.play();
@@ -782,7 +721,17 @@ function drawPeaks(canvas, peaks, progressRatio) {
 }
 
 async function renderLibrary() {
-  const records = await dbGetAll();
+  let records;
+  try {
+    records = await dbGetAll();
+  } catch (err) {
+    emptyState.textContent = 'Could not load your library — check your connection and reload.';
+    emptyState.style.display = 'block';
+    reelList.innerHTML = '';
+    libCount.textContent = '';
+    return;
+  }
+
   libCount.textContent = `${records.length} take${records.length === 1 ? '' : 's'}`;
   emptyState.style.display = records.length ? 'none' : 'block';
   reelList.innerHTML = '';
@@ -835,7 +784,7 @@ async function renderLibrary() {
       await dbUpdate(record);
     });
 
-   dlBtn.addEventListener('click', async () => {
+    dlBtn.addEventListener('click', async () => {
       const ext = record.mimeType.includes('mp4') ? 'm4a' : record.mimeType.includes('ogg') ? 'ogg' : 'webm';
       const res = await fetch(record.blobUrl);
       const blob = await res.blob();
@@ -848,7 +797,7 @@ async function renderLibrary() {
       URL.revokeObjectURL(a.href);
     });
 
-   const confirmBar = card.querySelector('.reel-confirm');
+    const confirmBar = card.querySelector('.reel-confirm');
     const confirmCancel = card.querySelector('.confirm-cancel');
     const confirmDelete = card.querySelector('.confirm-delete');
 
@@ -873,7 +822,6 @@ async function renderLibrary() {
       if (sharedAudioEl.duration) sharedAudioEl.currentTime = ratio * sharedAudioEl.duration;
     });
 
-    // keep this card's progress fill in sync while it's the playing one
     const syncInterval = setInterval(() => {
       if (!document.body.contains(card)) { clearInterval(syncInterval); return; }
       if (currentPlayingId === record.id && sharedAudioEl && sharedAudioEl.duration) {
@@ -898,4 +846,8 @@ window.addEventListener('resize', () => {
 });
 
 clearLiveWave();
-renderLibrary();
+if (isUnlocked()) {
+  renderLibrary();
+}
+// If locked, renderLibrary() runs once the correct passcode is submitted
+// (see the lock form's submit handler above).
