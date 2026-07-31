@@ -64,7 +64,7 @@ lockForm.addEventListener('submit', async (e) => {
     const days = lockRememberCheck.checked ? 7 : 0;
     const until = Date.now() + days * 24 * 60 * 60 * 1000;
     localStorage.setItem(LOCK_STORAGE_KEY, String(until));
-    sessionStorage.setItem('reel_api_passcode', entered);
+    localStorage.setItem('reel_api_passcode', entered);
     hideLock();
     renderLibrary();
   } else {
@@ -76,7 +76,7 @@ lockForm.addEventListener('submit', async (e) => {
 
 lockBtn.addEventListener('click', () => {
   localStorage.removeItem(LOCK_STORAGE_KEY);
-  sessionStorage.removeItem('reel_api_passcode');
+  localStorage.removeItem('reel_api_passcode');
   showLock();
 });
 
@@ -84,7 +84,7 @@ lockBtn.addEventListener('click', () => {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').catch(() => { });
   });
 }
 
@@ -114,7 +114,7 @@ window.addEventListener('appinstalled', () => {
 const API_BASE = '/api/takes';
 
 function getApiPasscode() {
-  return sessionStorage.getItem('reel_api_passcode') || '';
+  return localStorage.getItem('reel_api_passcode') || '';
 }
 
 async function apiFetch(path, options = {}) {
@@ -325,9 +325,11 @@ function pickMimeType() {
 
 async function startMicCapture() {
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: {
-      echoCancellation: true, noiseSuppression: false, autoGainControl: false
-    }});
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true, noiseSuppression: false, autoGainControl: false
+      }
+    });
     return true;
   } catch (err) {
     saveHint.textContent = 'Microphone access was blocked — allow it in your browser settings to record.';
