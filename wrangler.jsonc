@@ -1,0 +1,23 @@
+{
+  "name": "reel-recorder-pwa",
+  "compatibility_date": "2026-07-31",
+  "main": "worker.js",
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "reel-db",
+      "database_id": "299dd507-65d3-4a31-8472-f3797846ebe9"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "reel-audio"
+    }
+  ]
+}
