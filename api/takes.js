@@ -1,9 +1,27 @@
-const { sql } = require('@vercel/postgres');
-const { put } = require('@vercel/blob');
+const { put, list } = require('@vercel/blob');
+
+const MANIFEST_PATH = 'manifest.json';
 
 function checkAuth(req) {
   const passcode = req.headers['x-reel-passcode'];
   return passcode && passcode === process.env.REEL_PASSCODE;
+}
+
+async function readManifest() {
+  const { blobs } = await list({ prefix: MANIFEST_PATH, limit: 1 });
+  if (blobs.length === 0) return [];
+  const res = await fetch(blobs[0].url, { cache: 'no-store' });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+async function writeManifest(records) {
+  await put(MANIFEST_PATH, JSON.stringify(records), {
+    access: 'public',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: 'application/json'
+  });
 }
 
 module.exports = async (req, res) => {
@@ -13,11 +31,9 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    const { rows } = await sql`
-      SELECT id, name, duration, mime_type, blob_url, peaks, created_at
-      FROM takes ORDER BY created_at DESC
-    `;
-    res.status(200).json(rows);
+    const records = await readManifest();
+    records.sort((a, b) => b.created_at - a.created_at);
+    res.status(200).json(records);
     return;
   }
 
@@ -30,14 +46,21 @@ module.exports = async (req, res) => {
     const filename = `takes/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
     const blob = await put(filename, buffer, { access: 'public', contentType: mimeType });
-    const createdAt = Date.now();
 
-    const { rows } = await sql`
-      INSERT INTO takes (name, duration, mime_type, blob_url, peaks, created_at)
-      VALUES (${name}, ${duration}, ${mimeType}, ${blob.url}, ${JSON.stringify(peaks)}, ${createdAt})
-      RETURNING id, name, duration, mime_type, blob_url, peaks, created_at
-    `;
-    res.status(201).json(rows[0]);
+    const records = await readManifest();
+    const newRecord = {
+      id: Date.now(),
+      name,
+      duration,
+      mime_type: mimeType,
+      blob_url: blob.url,
+      peaks,
+      created_at: Date.now()
+    };
+    records.push(newRecord);
+    await writeManifest(records);
+
+    res.status(201).json(newRecord);
     return;
   }
 
